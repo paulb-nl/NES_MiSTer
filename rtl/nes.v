@@ -290,7 +290,7 @@ T65 cpu(
 	.rdy    (~pause_cpu),
 
 	.IRQ_n  (~(apu_irq | mapper_irq)),
-	.NMI_n  (~nmi),
+	.NMI_n  (nmi),
 	.R_W_n  (cpu_rnw),
 
 	.A      (cpu_addr),
@@ -397,13 +397,9 @@ assign joypad_clock = {joypad2_cs && mr_int, joypad1_cs && mr_int};
 /*************             PPU              ***************/
 /**********************************************************/
 
-// The real PPU has a CS pin which is a combination of the output of the 74319 (ppu address selector)
-// and the M2 pin from the CPU. This will only be low for 1 and 7/8th PPU cycles, or
-// 7 and 1/2 master cycles on NTSC. Therefore, the PPU should read or write once per cpu cycle, and
-// with our alignment, this should occur at PPU cycle 2 (the *third* cycle).
 wire mr_ppu     = mr_int && ppu_read; // Read *from* the PPU.
 wire mw_ppu     = mw_int && ppu_write; // Write *to* the PPU.
-wire ppu_cs = addr >= 'h2000 && addr < 'h4000;
+wire ppu_cs = addr[15:13] == 3'b001;
 wire [7:0] ppu_dout;            // Data from PPU to CPU
 wire chr_read, chr_write, chr_read_ex;       // If PPU reads/writes from VRAM
 wire [13:0] chr_addr, chr_addr_ex;           // Address PPU accesses in VRAM
@@ -413,33 +409,46 @@ wire [19:0] mapper_ppu_flags;   // PPU flags for mapper cheating
 wire [8:0] ppu_cycle;
 assign cycle = use_fake_h ? 9'd340 : ppu_cycle;
 
+// FIXME: move this logic to core's clock generators.
+reg [1:0] ce2_cnt = 0;
+wire ppu_ce2 = ce2_cnt == 1;
+always @(posedge clk) begin
+	if (ce2_cnt) ce2_cnt <= ce2_cnt - 1'd1;
+	if (ppu_ce) ce2_cnt <= 2;
+end
+
 PPU ppu(
 	.clk              (clk),
-	.ce               (ppu_ce),
-	.reset            (reset),
-	.sys_type         (sys_type),
-	.color            (color),
-	.din              (dbus),
-	.dout             (ppu_dout),
-	.ain              (addr[2:0]),
-	.read             (ppu_cs && mr_ppu),
-	.write            (ppu_cs && mw_ppu),
-	.nmi              (nmi),
-	.vram_r           (chr_read),
-	.vram_r_ex        (chr_read_ex),
-	.vram_w           (chr_write),
-	.vram_a           (chr_addr),
-	.vram_a_ex        (chr_addr_ex),
-	.vram_din         (chr_to_ppu),
-	.vram_dout        (chr_from_ppu),
-	.scanline         (scanline),
-	.cycle            (ppu_cycle),
+	.CE               (ppu_ce),
+	.CE2              (ppu_ce2),
+	.CS_n             (~(ppu_cs && phi2)),
+	.RESET            (reset),
+	.SYS_TYPE         (sys_type),
+	.COLOR            (color),
+	.DIN              (dbus),
+	.DOUT             (ppu_dout),
+	.AIN              (addr[2:0]),
+	.RW               (mr_int | ~mw_int),
+	.pread            (ppu_cs && mr_ppu),
+	.pwrite           (ppu_cs && mw_ppu),
+	.INT_n            (nmi),
+	.VRAM_R           (chr_read),
+	.VRAM_R_EX        (chr_read_ex),
+	.VRAM_W           (chr_write),
+	.VRAM_AB          (chr_addr),
+	.VRAM_A_EX        (chr_addr_ex),
+	.VRAM_DIN         (chr_to_ppu),
+	.VRAM_DOUT        (chr_from_ppu),
+	.SCANLINE         (scanline),
+	.CYCLE            (ppu_cycle),
 	.mapper_ppu_flags (mapper_ppu_flags),
-	.emphasis         (emphasis),
-	.short_frame      (skip_pixel),
-	.extra_sprites    (ex_sprites),
-	.mask             (mask)
+	.EMPHASIS         (emphasis),
+	.SHORT_FRAME      (skip_pixel),
+	.EXTRA_SPRITES    (ex_sprites),
+	.MASK             (mask),
+	.EXT_IN           (4'b0000)
 );
+
 
 
 /**********************************************************/
