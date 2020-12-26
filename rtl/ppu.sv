@@ -44,6 +44,8 @@ logic skip_en;
 
 // Continuous Intermediates
 logic skip_dot;
+logic clr_vbl_ovf_sp0_1;
+logic entering_vblank_1;
 
 assign pclk0 = ce;
 assign pclk1 = ce2;
@@ -51,26 +53,27 @@ assign pclk1 = ce2;
 // The pre render flag is set while we're on scanline -1.
 assign is_rendering = rendering_enabled & (is_visible | is_pre_render);
 assign at_last_cycle_group = (cycle[8:3] == 42);
-assign end_of_line = at_last_cycle_group && (cycle[2:0] == (skip_dot ? 3 : 4));
+//assign end_of_line = at_last_cycle_group && (cycle[2:0] == (skip_dot ? 3 : 4));
 
 // For NTSC only, the *last* cycle of odd frames is skipped. This signal is for de-jitter.
-assign short_frame = end_of_line & skip_dot;
+assign short_frame = skip_dot & pclk0;
 
 // All vblank clocked registers should have changed and be readable by cycle 1 of the vblank scanlines
 assign entering_vblank = (cycle == 0) && scanline == vblank_start_sl;
-assign exiting_vblank = (cycle == 0) && is_pre_render;
+assign exiting_vblank = clr_vbl_ovf_sp0;
 
 // This flag clears the sprite zero hit, sprite overflow, held_reset, and is_visible registers
-assign clr_vbl_ovf_sp0 = (scanline == vblank_end_sl) && end_of_line;
-
-
+assign skip_dot = clr_vbl_ovf_sp0 && ~even_frame_toggle && skip_en && (cycle == 339 && is_rendering);
 
 always @(posedge clk) if (reset) begin
 	cycle <= 9'd0;
 	scanline <= 9'd0;
-	even_frame_toggle <= 1; // Resets to 0.
+	even_frame_toggle <= 0; // Resets to 0.
 	held_reset <= 1;
 	is_visible <= 0;
+	end_of_line <= 0;
+	clr_vbl_ovf_sp0 <= 0;
+	is_pre_render <= 0;
 
 	case (sys_type)
 		2'b00,2'b11: begin // NTSC/Vs.
@@ -92,8 +95,12 @@ always @(posedge clk) if (reset) begin
 		end
 	endcase
 end else begin
-	if (pclk1) // The determinaton to advance to the next line is made at pclk1
-		skip_dot <= is_pre_render && ~even_frame_toggle && is_rendering && skip_en;
+	if (pclk1) begin // The determinaton to advance to the next line is made at pclk1
+		end_of_line <= skip_dot || cycle == 340;
+		//clr_vbl_ovf_sp0_1 <= is_pre_render; // AT pclk0 of dot1 of the pre-render scanline this should be true
+		clr_vbl_ovf_sp0 <= is_pre_render;
+		//entering_vblank <= (cycle == 0) && scanline == vblank_start_sl;
+	end
 
 	if (pclk0) begin
 		cycle <= cycle + 9'd1;
@@ -198,7 +205,9 @@ end else begin
 	if (ce) begin
 		write_2006_2 <= write_2006_1;
 		write_2006 <= write_2006_2;
+	end
 
+	if (pclk1) begin
 		// Horizontal copy at cycle 257 and rendering OR if delayed 2006 write
 		if (is_rendering && cycle == 256 || write_2006)
 			{vram_v[10], vram_v[4:0]} <= {vram_t[10], vram_t[4:0]};
@@ -1361,7 +1370,7 @@ logic HVTog;
 assign is_pal_address = &vram_v[13:8];
 
 logic clip_area;
-assign clip_area = ~|CYCLE[8:3];
+assign clip_area = ~|CYCLE[7:3]; // FIXME: 8:3??
 
 //assign is_rendering = rendering_enabled && (SCANLINE < 240 || is_pre_render);
 assign show_obj = (object_clip || ~clip_area) && enable_objects;
@@ -1385,7 +1394,6 @@ assign mask_pal = (|SYS_TYPE && pal_mask);
 
 assign color2 = (mask_right | mask_left | mask_pal) ? 6'h0E : color3;
 assign color1 = (grayscale ? {color_pipe[1][5:4], 4'b0} : color_pipe[1]);
-
 
 assign palette_write = write_ce && (AIN == 7) && is_pal_address;
 assign pram_addr = is_rendering ? pixel : (is_pal_address ? vram_v[4:0] : (master_mode ? 5'd0 : {1'd0, EXT_IN}));
@@ -1658,9 +1666,8 @@ assign rendering_enabled = enable_objects | enable_playfield;
 always @(posedge clk) if (pclk0)
 	color_pipe <= '{color2, color_pipe[0], color_pipe[1], color_pipe[2]};
 
-always @(posedge clk) if (pclk0) begin
-	if (clr_vbl_ovf_sp0) begin
-		sprite0_hit_bg <= 0;
+always @(posedge clk) if (clr_vbl_ovf_sp0) begin
+	sprite0_hit_bg <= 0;
 	end else if (
 		~CYCLE[8]           &&    // X Pixel 0..255
 		~&CYCLE[7:0]        &&    // X pixel != 255
@@ -1672,7 +1679,6 @@ always @(posedge clk) if (pclk0) begin
 
 			sprite0_hit_bg <= 1;
 	end
-end
 
 // After spending a few sultry afternoons with visual 2c02, it seems that writes to
 // the PPU follow a pattern most of the time. Read and Write are almost aalways goverened by three inputs:
@@ -1822,7 +1828,7 @@ always @(posedge clk) begin
 					latched_dout[7] <= vbl_flag;
 				if (read) begin
 					latched_dout[5] <= sprite_overflow;
-					latched_dout[6] <= sprite0_hit_bg;
+					if (pclk0) latched_dout[6] <= sprite0_hit_bg;
 					refresh_high <= 1'b1;
 				end
 			end

@@ -299,10 +299,10 @@ always @(posedge clk) begin
 
 	if(pix_ce) begin
 		if(hide_overscan) begin
-			HBlank <= (hc >= HBL_START && hc <= HBL_END);                  // 280 - ((224/240) * 16) = 261.3
+			HBlank <= (hc >= HBL_START || hc <= HBL_END);                  // 280 - ((224/240) * 16) = 261.3
 			VBlank <= (vc > (VBL_START - 9)) || (vc < 8);                  // 240 - 16 = 224
 		end else begin
-			HBlank <= (hc >= HBL_START) && (hc <= HBL_END);                // 280 pixels
+			HBlank <= (hc >= HBL_START) || (hc <= HBL_END);                // 280 pixels
 			VBlank <= (vc >= VBL_START);                                   // 240 lines
 		end
 		
@@ -315,8 +315,8 @@ always @(posedge clk) begin
 	end
 end
 
-localparam HBL_START = 256;
-localparam HBL_END   = 340;
+localparam HBL_START = 259;
+localparam HBL_END   = 1;
 localparam VBL_START = 240;
 localparam VBL_END   = 511;
 

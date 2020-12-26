@@ -197,7 +197,7 @@ wire skip_pixel;
 reg freeze_clocks = 0;
 reg [4:0] faux_pixel_cnt;
 
-wire use_fake_h = freeze_clocks && faux_pixel_cnt < 6;
+wire use_fake_h = freeze_clocks && faux_pixel_cnt > 3;
 reg [1:0] ppu_tick = 0;
 
 reg [1:0] last_sys_type;
@@ -242,7 +242,7 @@ always @(posedge clk) begin
 
 	if (skip_pixel && (faux_pixel_cnt == 0)) begin
 		freeze_clocks <= 1'b1;
-		faux_pixel_cnt <= {div_ppu_n - 1'b1, 1'b0} + 1'b1;
+		faux_pixel_cnt <= 8;
 	end
 
 
