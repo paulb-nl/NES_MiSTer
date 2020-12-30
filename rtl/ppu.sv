@@ -1265,8 +1265,8 @@ assign EXT_OUT = master_mode ? pram_addr[3:0] : EXT_IN;
 assign DOUT = latched_dout;
 assign VRAM_W = write && (AIN == 7) && !is_pal_address && !is_rendering;
 assign VRAM_DOUT = DIN;
-assign VRAM_R = (vram_r_ppudata && ~vram_read_done) || is_rendering && ~CYCLE[0] && (|CYCLE || skipped);
-assign ALE = is_rendering ? CYCLE[0] : ((read_ce || write_ce) && AIN == 7);
+assign VRAM_R = vram_r_ppudata || (is_rendering && CYCLE[0]);
+assign ALE = is_rendering ? ~CYCLE[0] : ((read_ce || write_ce) && AIN == 7);
 assign VRAM_AB = vram_a;
 assign VRAM_A_EX = {1'b0, sprite_vram_addr_ex};
 assign COLOR = color1;
@@ -1284,7 +1284,7 @@ always_comb begin
 		else
 			VRAM_R_EX = 0;
 
-		if (CYCLE[2:1] == 0 || CYCLE > 338 || skipped)
+		if (CYCLE[2:1] == 0 || CYCLE >= 338)
 			vram_a = {2'b10, vram_v[11:0]};                                     // Name Table
 		else if (CYCLE[2:1] == 1)
 			vram_a = {2'b10, vram_v[11:10], 4'b1111, vram_v[9:7], vram_v[4:2]}; // Attribute table
@@ -1495,8 +1495,6 @@ PaletteRam palette_ram(
 // reads or writes take two PPU cycles. ALE is active when 2007 read or write happens, which latches
 // the address. On the next ppu cycle, the data is written or read
 
-logic vram_read_done;
-
 assign rendering_enabled = enable_objects | enable_playfield;
 
 always @(posedge clk) begin
@@ -1567,14 +1565,8 @@ always @(posedge clk) begin
 	if (read && AIN == 2)
 		vbl_flag <= 0;
 
-	if (pclk0) begin
-		if (vram_r_ppudata && ~vram_read_done) begin
-			vram_latch <= VRAM_DIN;
-			vram_read_done <= 1;
-		end
-		if (~read)
-			vram_read_done <= 0;
-
+	if (vram_r_ppudata) begin
+		vram_latch <= VRAM_DIN;
 	end
 
 	if (pclk0) begin
