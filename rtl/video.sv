@@ -295,7 +295,7 @@ always @(posedge clk) begin
 	// http://wiki.nesdev.com/w/index.php?title=Overscan#For_emulator_developers
 
 	// Overscan is simply a zoom-in, and most emulators will take off 8 from the top and bottom to reach the magic
-	// number of 224 pixels, so we take off a proportional percentage from the sides to compensate.
+	// number of 224 pixels.
 
 	if(pix_ce) begin
 		if(hide_overscan) begin
@@ -315,12 +315,12 @@ always @(posedge clk) begin
 	end
 end
 
-localparam HBL_START = 259;
+localparam HBL_START = 258;
 localparam HBL_END   = 1;
 localparam VBL_START = 240;
 localparam VBL_END   = 511;
 
-wire is_padding = (hc > 255);
+wire is_padding = (hc > 258);
 
 reg dark_r, dark_g, dark_b;
 // bits are in order {B, G, R} for NTSC color emphasis

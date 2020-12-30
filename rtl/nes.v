@@ -183,8 +183,8 @@ wire cart_ce = (cart_pre & ppu_ce); // First PPU cycle where cpu data is visible
 
 // Signals
 wire cart_pre  = (ppu_tick == (cpu_tick_count[2] ? 1 : 0));
-wire ppu_read  = (ppu_tick == (cpu_tick_count[2] ? 2 : 1));
-wire ppu_write = (ppu_tick == (cpu_tick_count[2] ? 1 : 0));
+// wire ppu_read  = (ppu_tick == (cpu_tick_count[2] ? 2 : 1));
+// wire ppu_write = (ppu_tick == (cpu_tick_count[2] ? 1 : 0));
 
 wire phi2 = (div_cpu > 4 && div_cpu < div_cpu_n);
 
@@ -397,8 +397,6 @@ assign joypad_clock = {joypad2_cs && mr_int, joypad1_cs && mr_int};
 /*************             PPU              ***************/
 /**********************************************************/
 
-wire mr_ppu     = mr_int && ppu_read; // Read *from* the PPU.
-wire mw_ppu     = mw_int && ppu_write; // Write *to* the PPU.
 wire ppu_cs = addr[15:13] == 3'b001;
 wire [7:0] ppu_dout;            // Data from PPU to CPU
 wire chr_read, chr_write, chr_read_ex;       // If PPU reads/writes from VRAM
@@ -429,8 +427,6 @@ PPU ppu(
 	.DOUT             (ppu_dout),
 	.AIN              (addr[2:0]),
 	.RW               (mr_int | ~mw_int),
-	.pread            (ppu_cs && mr_ppu),
-	.pwrite           (ppu_cs && mw_ppu),
 	.INT_n            (nmi),
 	.VRAM_R           (chr_read),
 	.VRAM_R_EX        (chr_read_ex),
